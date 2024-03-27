@@ -27,6 +27,7 @@ dash-table==5.0.0
 debugpy==1.8.1
 decorator==5.1.1
 defusedxml==0.7.1
+et-xmlfile==1.1.0
 exceptiongroup==1.2.0
 executing==2.0.1
 fastjsonschema==2.19.1
@@ -87,6 +88,7 @@ notebook==7.1.2
 notebook_shim==0.2.4
 numba==0.59.1
 numpy==1.26.4
+openpyxl==3.1.2
 optuna==3.6.0
 overrides==7.7.0
 packaging==24.0
