@@ -248,3 +248,125 @@ print("Training shape:", X_train.shape)
 print("Validation shape:", X_val.shape)
 print("Test shape:", X_test.shape)
 
+
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+
+
+def train_tree_and_logistic_models(X_train, y_train, max_leaf_nodes):
+    tree_model = DecisionTreeClassifier(max_leaf_nodes=max_leaf_nodes, random_state=1, min_samples_split=50)
+    tree_model.fit(X_train, y_train)
+
+    leaf_ids = tree_model.apply(X_train)
+
+    models = []
+    scalers = []
+    leaf_info = []
+
+    # Train logistic regression models on each leaf node
+    for leaf_id in np.unique(leaf_ids):
+        leaf_X_train = X_train[leaf_ids == leaf_id]
+        leaf_y_train = y_train[leaf_ids == leaf_id]
+
+        # Check if the leaf node contains samples from more than one class
+        if len(np.unique(leaf_y_train)) > 1:
+            scaler = StandardScaler().fit(leaf_X_train)
+            leaf_X_train_scaled = scaler.transform(leaf_X_train)
+
+            model = LogisticRegression(random_state=1)
+            model.fit(leaf_X_train_scaled, leaf_y_train)
+
+            models.append(model)
+            scalers.append(scaler)
+            leaf_info.append((leaf_id, 'LR Model Trained'))
+        else:
+            # For leaf nodes with only one class
+            models.append(None)
+            scalers.append(None)
+            leaf_info.append((leaf_id, f'Single class: {np.unique(leaf_y_train)[0]}'))
+
+    return tree_model, models, scalers, leaf_info
+
+
+def predict_with_tree_splits(X, tree_model, models, scalers, leaf_info):
+    # Predict leaf node IDs for X
+    leaf_ids = tree_model.apply(X)
+
+    # Initialize an empty list to store predictions
+    probabilities = []
+
+    # Iterate over each sample in X
+    for i in tqdm(range(len(X))):
+        leaf_id = leaf_ids[i]
+
+        # Find the model and scaler for the current leaf_id
+        if leaf_id in [info[0] for info in leaf_info if 'LR Model Trained' in info[1]]:
+            model_idx = [info[0] for info in leaf_info].index(leaf_id)
+            model = models[model_idx]
+            scaler = scalers[model_idx]
+
+            # Scale the features for the current sample
+            X_scaled = scaler.transform(X.iloc[[i]])
+
+            # Predict probabilities using the logistic regression model
+            pred_probs = model.predict_proba(X_scaled)
+
+            prob = pred_probs[:, 1]
+        else:
+            class_label = [info[1].split(':')[1].strip() for info in leaf_info if info[0] == leaf_id][0]
+            prob = np.array([1.0 if class_label == '1' else 0.0])
+
+        probabilities.append(prob[0])
+
+    return np.array(probabilities)
+
+
+def plot_roc_curve(fpr, tpr, title='ROC Curve'):
+    roc_auc = auc(fpr, tpr)
+    plt.figure()
+    lw = 2
+    plt.plot(fpr, tpr, color='darkorange', lw=lw, label='ROC curve (area = %0.2f)' % roc_auc)
+    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(title)
+    plt.legend(loc="lower right")
+    plt.show()
+
+def evaluate_predictions(y_true, y_pred):
+    # Compute metrics
+    balanced_accuracy = balanced_accuracy_score(y_true, y_pred)
+
+    # Display metrics
+    print(f"Balanced Accuracy: {balanced_accuracy:.4f}")
+
+    # Confusion Matrix calculation and display
+    cm = confusion_matrix(y_true, y_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+    disp.plot()
+    print("\nConfusion Matrix:")
+    print(cm)
+
+    # Display Classification Report
+    print("\nClassification Report:")
+    print(classification_report(y_true, y_pred))
+
+# 0.77 to beat
+# %%
+tree_model, models, scalers, leaf_info = train_tree_and_logistic_models(X_train, y_train, max_leaf_nodes=8)
+
+y_train_pred_prob = predict_with_tree_splits(X_train, tree_model, models, scalers, leaf_info)
+y_val_pred_prob = predict_with_tree_splits(X_val, tree_model, models, scalers, leaf_info)
+y_test_pred_prob = predict_with_tree_splits(X_test, tree_model, models, scalers, leaf_info)
+
+fpr_train, tpr_train, _ = roc_curve(y_train.astype(int), y_train_pred_prob)
+plot_roc_curve(fpr_train, tpr_train, 'Training Set ROC Curve Tree - Logit')
+
+fpr_val, tpr_val, _ = roc_curve(y_val.astype(int), y_val_pred_prob)
+plot_roc_curve(fpr_val, tpr_val, 'Val Set ROC Curve Tree - Logit')
+
+fpr_test, tpr_test, _ = roc_curve(y_test.astype(int), y_test_pred_prob)
+plot_roc_curve(fpr_test, tpr_test, 'Test Set ROC Curve Tree - Logit')
