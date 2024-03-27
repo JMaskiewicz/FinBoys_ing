@@ -18,7 +18,7 @@
 - **c. Drop useless variables/cols**: Removing unnecessary variables
 - **d. Outlier**: Identifying and handling outliers
 - **e. Standarize/normalize data**: Standardizing or normalizing data
-- **f. One-hot encoding**: Applying one-hot encoding to categorical variables
+- **f. One-hot encoding**: Applying one-hot encoding to categorical variables (worth to remember that some variables could not be present in test)
 - **g. PCA?**: Principal Component Analysis (optional)
 - **h. VIF and VIP**: Checking Variance Inflation Factor and Variable Importance in Projection
 - **i. Korelacje**: Correlation analysis
