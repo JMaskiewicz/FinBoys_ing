@@ -370,3 +370,5 @@ plot_roc_curve(fpr_val, tpr_val, 'Val Set ROC Curve Tree - Logit')
 
 fpr_test, tpr_test, _ = roc_curve(y_test.astype(int), y_test_pred_prob)
 plot_roc_curve(fpr_test, tpr_test, 'Test Set ROC Curve Tree - Logit')
+
+# test set
