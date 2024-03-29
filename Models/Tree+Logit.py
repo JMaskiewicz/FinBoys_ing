@@ -249,6 +249,7 @@ print("Validation shape:", X_val.shape)
 print("Test shape:", X_test.shape)
 
 
+#%%
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
@@ -372,3 +373,136 @@ fpr_test, tpr_test, _ = roc_curve(y_test.astype(int), y_test_pred_prob)
 plot_roc_curve(fpr_test, tpr_test, 'Test Set ROC Curve Tree - Logit')
 
 # test set
+#%%
+def train_tree_and_logistic_models2(X_train, y_train, max_leaf_nodes):
+    tree_model = DecisionTreeClassifier(max_leaf_nodes=max_leaf_nodes, random_state=1)
+    tree_model.fit(X_train, y_train)
+
+    # Identify features used in tree splits
+    used_features = np.unique(tree_model.tree_.feature[tree_model.tree_.feature >= 0])
+
+    # Exclude these features from the dataset for Logistic Regression
+    X_train_lr = X_train.drop(X_train.columns[used_features], axis=1)
+
+    leaf_ids = tree_model.apply(X_train)
+
+    models = []
+    scalers = []
+    leaf_info = []
+
+    # Train logistic regression models on each leaf node
+    for leaf_id in np.unique(leaf_ids):
+        leaf_X_train = X_train_lr[leaf_ids == leaf_id]
+        leaf_y_train = y_train[leaf_ids == leaf_id]
+
+        if len(np.unique(leaf_y_train)) > 1:
+            scaler = StandardScaler().fit(leaf_X_train)
+            leaf_X_train_scaled = scaler.transform(leaf_X_train)
+
+            model = LogisticRegression(random_state=1)
+            model.fit(leaf_X_train_scaled, leaf_y_train)
+
+            models.append(model)
+            scalers.append(scaler)
+            leaf_info.append((leaf_id, 'LR Model Trained'))
+        else:
+            models.append(None)
+            scalers.append(None)
+            leaf_info.append((leaf_id, f'Single class: {np.unique(leaf_y_train)[0]}'))
+
+    return tree_model, models, scalers, leaf_info, X_train_lr.columns
+
+def predict_with_tree_splits2(X, tree_model, models, scalers, leaf_info, lr_columns):
+    # Predict leaf node IDs for X
+    leaf_ids = tree_model.apply(X)
+
+    # Initialize an empty list to store predictions
+    probabilities = []
+
+    # Filter X based on lr_columns before prediction
+    X_filtered = X[lr_columns]
+
+    # Iterate over each sample in X
+    for i in tqdm(range(len(X))):
+        leaf_id = leaf_ids[i]
+
+        # Find the model and scaler for the current leaf_id
+        model_idx = [info[0] for info in leaf_info].index(leaf_id) if leaf_id in [info[0] for info in leaf_info if 'LR Model Trained' in info[1]] else None
+        if model_idx is not None:
+            model = models[model_idx]
+            scaler = scalers[model_idx]
+
+            # Scale the features for the current sample
+            X_scaled = scaler.transform(X_filtered.iloc[[i]])
+
+            # Predict probabilities using the logistic regression model
+            pred_probs = model.predict_proba(X_scaled)
+
+            prob = pred_probs[:, 1]
+        else:
+            # For leaf nodes that were not trained (single class or ignored)
+            # Directly assign the probability based on the class label
+            class_label = [info[1].split(':')[1].strip() for info in leaf_info if info[0] == leaf_id][0]
+            prob = np.array([1.0 if class_label == '1' else 0.0])
+
+        probabilities.append(prob[0])
+
+    return np.array(probabilities)
+#%%
+tree_model, models, scalers, leaf_info, lr_columns = train_tree_and_logistic_models2(X_train, y_train, max_leaf_nodes=3)
+
+y_train_pred_prob = predict_with_tree_splits2(X_train, tree_model, models, scalers, leaf_info, lr_columns)
+y_val_pred_prob = predict_with_tree_splits2(X_val, tree_model, models, scalers, leaf_info, lr_columns)
+y_test_pred_prob = predict_with_tree_splits2(X_test, tree_model, models, scalers, leaf_info, lr_columns)
+
+fpr_train, tpr_train, _ = roc_curve(y_train.astype(int), y_train_pred_prob)
+plot_roc_curve(fpr_train, tpr_train, 'Training Set ROC Curve Tree - Logit')
+
+fpr_val, tpr_val, _ = roc_curve(y_val.astype(int), y_val_pred_prob)
+plot_roc_curve(fpr_val, tpr_val, 'Val Set ROC Curve Tree - Logit')
+
+fpr_test, tpr_test, _ = roc_curve(y_test.astype(int), y_test_pred_prob)
+plot_roc_curve(fpr_test, tpr_test, 'Test Set ROC Curve Tree - Logit')
+
+
+#%%
+scaler_corrected = StandardScaler()
+X_train_scaled_corrected = scaler_corrected.fit_transform(X_train)
+X_val_scaled_corrected = scaler_corrected.transform(X_val)
+X_test_scaled_corrected = scaler_corrected.transform(X_test)
+
+# Define a range of C values to explore
+C_values = np.logspace(-5, 2, 40)
+
+# Initialize variables to store the best AUC and corresponding C value
+best_auc = 0
+best_C = None
+
+# Dictionary to store AUC scores for different C values for inspection
+auc_scores = {}
+
+# Loop over the range of C values to find the best performing C on the validation set
+for C in C_values:
+    model = LogisticRegression(penalty='l2', solver='liblinear', C=C, random_state=1)
+    model.fit(X_train_scaled_corrected, y_train)
+    y_val_pred_probs = model.predict_proba(X_val_scaled_corrected)[:, 1]
+    val_auc = roc_auc_score(y_val, y_val_pred_probs)
+
+    # Store the AUC score for inspection
+    auc_scores[C] = val_auc
+
+    # Update best C and AUC if current model performs better
+    if val_auc > best_auc:
+        best_auc = val_auc
+        best_C = C
+
+print(best_C, best_auc)
+
+logit_model_lasso_best = LogisticRegression(penalty='l2', solver='liblinear', C=best_C, random_state=1)
+logit_model_lasso_best.fit(X_train_scaled_corrected, y_train)
+
+# Predicting probabilities for the training set
+y_test_pred_probs_best = logit_model_lasso_best.predict_proba(X_test_scaled_corrected)[:, 1]
+
+fpr_test, tpr_test, _ = roc_curve(y_test.astype(int), y_test_pred_probs_best)
+plot_roc_curve(fpr_test, tpr_test, 'Test Set ROC Curve Tree - Logit')
