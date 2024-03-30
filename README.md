@@ -23,6 +23,9 @@
 - **h. VIF and VIP**: Checking Variance Inflation Factor and Variable Importance in Projection
 - **i. Korelacje**: Correlation analysis
 - **j. Some random time functions?**: Miscellaneous time-related functions
+- **h. REF** - https://machinelearningmastery.com/rfe-feature-selection-in-python/
+- **l. KNN filling**
+- 
 
 ### 3. Models
 - **a. XGboost**: XGBoost algorithm
@@ -34,6 +37,7 @@
 ### 4. Evaluate/Test
 - **a. K-fold**: K-fold cross-validation
 - **b. Statistics**: Metrics like accuracy, balanced accuracy, F1, etc.
+- **c. PFI** https://scikit-learn.org/stable/modules/permutation_importance.html
 
 ### 5. Plots
 - **a. ROC**: Receiver Operating Characteristic curves
