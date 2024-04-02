@@ -1,7 +1,8 @@
 # FinBoys_ing
 
 ### time managment
-1.5h – data preparation
+0.5 - task reading 
+2.5h – data preparation
 1h – modeling 
 2h – opis 
 1h – reserve time 
