@@ -398,6 +398,8 @@ def transform_dataframe(df):
 
 DF_FINAL, imputation_means = transform_dataframe(df)
 
+
+
 #%%
 X2 = df.drop('Target', axis=1)
 y2 = df['Target']
@@ -413,7 +415,6 @@ X_test_FL = X_test
 y_train_FL = y_train_tuning
 y_val_FL = y_val
 y_test_FL = y_test
-
 
 import statsmodels.api as sm
 # %%
@@ -512,9 +513,9 @@ def attention_tree_model(data: pd.DataFrame, y: pd.Series) -> pd.Series:
 
     return dt_classifier
 
-attention_tree_model = attention_tree_model(df, df['Target'])
+attention_tree_model = attention_tree_model(get_data_attention(X_train_ATT), y_train_ATT)
 
-attention_tree_model.predict_proba(get_data_attention(df))
+a = attention_tree_model.predict_proba(get_data_attention(X_test_ATT))[:, 1]
 
 
 # %%
@@ -601,7 +602,7 @@ evaluate_predictions(y_test_FINAL, predictions)
 
 # %%
 y_train_pred_prob = logit_model.predict_proba(X_train_FINAL_scaled)[:, 1]
-fpr_train, tpr_train, _ = roc_curve(y_test_FINAL.astype(int).values, y_train_pred_prob)
+fpr_train, tpr_train, _ = roc_curve(y_train_FINAL.astype(int).values, y_train_pred_prob)
 plot_roc_curve(fpr_train, tpr_train, 'Training Set ROC Curve ENSEMBLE')
 
 y_val_pred_prob = logit_model.predict_proba(X_val_FINAL_scaled)[:, 1]
