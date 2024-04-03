@@ -9,13 +9,10 @@ def slope_to_angle(slope):
     return np.degrees(np.arctan(slope))
 
 def calculate_trend(series):
-    min_val = np.min(series)
-    max_val = np.max(series)
-    normalized_series = (series - min_val) / (max_val - min_val) if max_val > min_val else series
     """Calculate the slope of the trend line for the series."""
     time = np.arange(len(series)).reshape(-1, 1)
 
-    model = LinearRegression().fit(time, normalized_series)
+    model = LinearRegression().fit(time, series)
     return model.coef_[0]
 
 # Calculate slope and then convert to angle
