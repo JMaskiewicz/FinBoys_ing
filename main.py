@@ -402,7 +402,6 @@ study.optimize(objective, n_trials=100)
 # %%
 print('Best trial:', study.best_trial.params)
 # %%
-
 model_XGB = XGBClassifier(**study.best_trial.params)
 model_XGB.fit(X_train_XGB_resampled, y_train_XGB_resampled, eval_set=[(X_val, y_val)], verbose=False)
 #%%
