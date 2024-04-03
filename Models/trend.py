@@ -9,6 +9,7 @@ def slope_to_angle(slope):
     return np.degrees(np.arctan(slope))
 
 def calculate_trend(series):
+    series = series / series[0]
     """Calculate the slope of the trend line for the series."""
     time = np.arange(len(series)).reshape(-1, 1)
 

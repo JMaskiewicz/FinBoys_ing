@@ -65,14 +65,37 @@ torch.manual_seed(seed)
 df = pd.read_csv(r'C:\Users\jmask\Desktop\ING\in_time.csv')
 
 columns_drop = ['External_term_loan_balance', 'External_mortgage_balance', 'External_credit_card_balance']
-
 df = df.drop(columns=columns_drop)
-df = df.iloc[:100]
+
+# new 2 variables
+# List of time points
+time_points = ['_H' + str(i) for i in range(0, 13)]  # Adjust the range if necessary
+
+# Iterate over each time point and create the TOTAL_amount_balance variable
+for time_point in time_points:
+    current_col = f'Current_amount_balance{time_point}'
+    savings_col = f'Savings_amount_balance{time_point}'
+    total_col = f'TOTAL_amount_balance{time_point}'
+
+    # Sum the two columns and assign to the new total column
+    df[total_col] = df[current_col] + df[savings_col]
+
+# Iterate over each time point and create the TOTAL_amount_balance variable
+for time_point in time_points:
+    inc_col = f'inc_transactions_amt{time_point}'
+    out_col = f'out_transactions_amt{time_point}'
+    total_col = f'Diff_transactions{time_point}'
+
+    # Sum the two columns and assign to the new total column
+    df[total_col] = df[inc_col] - df[out_col]
+
+
+# df = df.iloc[:100]
 
 #%%
 # change into linear model for trend
 
-time_attention_variables= {'Current_amount_balance',
+time_attention_variables = {'Current_amount_balance',
  'DPD_credit_card',
  'DPD_mortgage',
  'DPD_term_loan',
@@ -97,11 +120,9 @@ time_attention_variables= {'Current_amount_balance',
 }
 
 time_linear_variables = {
- 'Current_amount_balance',
+ 'TOTAL_amount_balance',
  'Income',
- 'Savings_amount_balance',
-
-
+ 'Diff_transactions',
 }
 
 from sklearn.linear_model import LinearRegression
@@ -126,6 +147,7 @@ def calculate_trend_and_variance(df, variable_names):
 
         for i in tqdm(range(len(df))):
             series_values = df.loc[i, [f"{base_var}_H{j}" for j in range(12, -1, -1)]].values.astype(float)
+            series_values = series_values/series_values[0] if series_values[0] != 0 else series_values
             if not np.any(np.isnan(series_values)):
                 slope = calculate_trend(series_values.reshape(-1, 1))
                 angle = slope_to_angle(slope)
@@ -152,10 +174,13 @@ columns_to_keep = [col for col in df.columns if not re.search(r'H\d+', col)]
 
 df_filtered = df[columns_to_keep]
 
-columns_drop = ['Ref_month', 'Birth_date', 'Contract_origination_date',
-'Contract_end_date', 'Oldest_account_date']
+columns = ["Birth_date", "Contract_origination_date", "Contract_end_date", "Oldest_account_date"]
 
-df_filtered = df_filtered.drop(columns=columns_drop)
+ref = pd.to_datetime(df_filtered['Ref_month'], format='%m-%Y')
+for col in columns:
+    d = pd.to_datetime(df_filtered[col], format='%d-%m-%Y')
+    df_filtered[col + '_diff'] = abs(ref - d).dt.days
+    print(df_filtered[col + '_diff'])
 
 columns_to_replace = ['Active_accounts', 'Active_loans', 'Active_mortgages']
 
@@ -168,10 +193,8 @@ X = df_filtered.drop('Target', axis=1)
 y = df_filtered['Target']
 X, y
 
-
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1)
 X_train_tuning, X_val, y_train_tuning, y_val = train_test_split(X_train, y_train, test_size=0.25, random_state=1)
-
 
 from itertools import combinations
 import pandas as pd
@@ -180,8 +203,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
-
-# Assuming X, y are defined, and X_train_tuning, X_val, y_train_tuning, y_val are already split as per the instructions.
 
 # Initialize a dictionary to hold the best AUC score for each column
 best_auc_scores = {}
