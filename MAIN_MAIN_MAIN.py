@@ -546,7 +546,7 @@ DF_TEST_FINAL = DF_FINAL.loc[test_indices]
 #%%
 # final input
 # 1 XGBoost model
-# 2 - active cards etc
+# 2 - active cards MODEL
 # 3 attention model
 # 'Diff_transactions_variance_pct',
 # 'TOTAL_amount_balance_variance_pct',
