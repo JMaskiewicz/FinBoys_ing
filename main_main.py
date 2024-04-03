@@ -54,15 +54,22 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 
 # %%
+
+
+import pandas as pd 
+import numpy as np 
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import balanced_accuracy_score, accuracy_score
+import random
+
 # set random seeds for reproducibility
 seed = 1234
 random.seed(seed)
 np.random.seed(seed)
-torch.manual_seed(seed)
 # %% md
 ## Let's load the dataset
 # %%
-df = pd.read_csv(r'C:\Users\jmask\Desktop\ING\in_time.csv')
+df = pd.read_csv('dane/in_time.csv')
 
 columns_drop = ['External_term_loan_balance', 'External_mortgage_balance', 'External_credit_card_balance'] # useless
 df = df.drop(columns=columns_drop)
@@ -425,12 +432,7 @@ DF_FINAL = df_filtered[['Diff_transactions_variance_pct', 'TOTAL_amount_balance_
 #%%
 
 # cards model
-columns_financial_liabilities = ["Credit_cards",
-"Active_credit_card_lines",
-"Debit_cards",
-"Active_loans",
-"Active_mortgages",
-"Active_accounts"]
+
 
 # FL - financial liabilities
 X_train_FL = X_train_tuning
@@ -439,6 +441,33 @@ X_test_FL = X_test
 y_train_FL = y_train_tuning
 y_val_FL = y_val
 y_test_FL = y_test
+
+
+#%%
+def get_financial_liabilities(data: pd.DataFrame, y: pd.Series) -> pd.Series:
+    columns_financial_liabilities = ["Credit_cards",
+                                    "Active_credit_card_lines",
+                                    "Debit_cards",
+                                    "Active_loans",
+                                    "Active_mortgages",
+                                    "Active_accounts"]
+    
+    X = data[columns_financial_liabilities].replace(-9999, 0)  #we replaced -9999 with zero 
+    # Add a constant to the features (important for statsmodels)
+    X = sm.add_constant(X)
+
+    # Fit the logistic regression model
+    model = sm.Logit(y, X).fit()
+
+    # Apply the coefficients as weights to sum all columns in each row
+    # Note: We skip the first coefficient as it's the intercept
+    coefficients = model.params[1:]  # Exclude intercept
+    weighted_sum = (X.iloc[:, 1:] * coefficients.values).sum(axis=1)
+    return weighted_sum
+
+get_financial_liabilities(X_train_FL, y_train_FL)
+
+
 
 #%%
 import statsmodels.api as sm
@@ -454,35 +483,80 @@ y_train_ATT = y_train_tuning
 y_val_ATT = y_val
 y_test_ATT = y_test
 
-df = data[columns_financial_liabilities + ['Target']].replace(-9999, 0)  #we replaced -9999 with zero
+#%%
 
-X = df.iloc[:, :-1]  # Assuming the last column is the target
-y = df.iloc[:, -1]
+X_train_ATT
 
-# Add a constant to the features (important for statsmodels)
-X = sm.add_constant(X)
-
-# Fit the logistic regression model
-model = sm.Logit(y, X).fit()
-
-# Print the summary of the logistic regression model
-print(model.summary())
-
-# Apply the coefficients as weights to sum all columns in each row
-# Note: We skip the first coefficient as it's the intercept
-coefficients = model.params[1:]  # Exclude intercept
+#%% 
 
 
-coefficients
+def max_by_mean(data: pd.DataFrame, prefix: str) -> pd.Series:
+    data_for_prefix = data[data.columns[data.columns.str.startswith(prefix)]]
+    data_for_prefix_adj = data_for_prefix + 1
 
+    return data_for_prefix_adj.max(axis=1)/data_for_prefix_adj.mean(axis=1)
 
-weighted_sum = (X.iloc[:, 1:] * coefficients.values).sum(axis=1)
+def variance(data: pd.DataFrame, prefix: str) -> pd.Series:
+    data_for_prefix = data[data.columns[data.columns.str.startswith(prefix)]]
+
+    return data_for_prefix.var(axis=1)
 
 
 #%%
-X
+
+X_train_ATT.isna().any().any()
 #%%
-X.iloc[:, 1:] * coefficients.values
+
+from sklearn.tree import DecisionTreeClassifier
+
+
+
+#%% 
+
+def get_data_attention(data: pd.DataFrame):
+    time_series_data = [ 'DPD_credit_card',
+    'DPD_mortgage',
+    'DPD_term_loan',
+    'Default_flag',
+    'Os_credit_card',
+    'Os_mortgage',
+    'Overdue_credit_card',
+    'Overdue_mortgage',
+    'Overdue_term_loan',]    
+
+    df = data.copy()
+    data_attention = pd.DataFrame()   
+
+    for columns in time_series_data:  
+        data_attention[f'var_{columns}'] = variance(data, columns)
+        data_attention[f'max_by_mean_{columns}'] = max_by_mean(data, columns)
+
+    return data_attention
+
+get_data_attention(df)
+
+#%%
+
+def attention_tree_model(data: pd.DataFrame, y: pd.Series) -> pd.Series:
+
+    X = get_data_attention(data)
+    print(data.columns)
+    # Initialize and train classifier
+    dt_classifier = DecisionTreeClassifier(random_state=42)
+    dt_classifier.fit(X, y)
+
+    return dt_classifier
+
+
+#%%
+
+attention_tree_model = attention_tree_model(df, df['Target'])
+
+attention_tree_model.predict_proba(get_data_attention(df))
+
+
+
+
 #%%
 df = pd.read_csv('financial_data.csv')
 
