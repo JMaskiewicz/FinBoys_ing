@@ -64,12 +64,14 @@ torch.manual_seed(seed)
 # %%
 df = pd.read_csv(r'C:\Users\jmask\Desktop\ING\in_time.csv')
 
-columns_drop = ['External_term_loan_balance', 'External_mortgage_balance', 'External_credit_card_balance']
+columns_drop = ['External_term_loan_balance', 'External_mortgage_balance', 'External_credit_card_balance'] # useless
 df = df.drop(columns=columns_drop)
-
-# new 2 variables
+df['Last_Income'] = df['Income_H0']
+df = df[:10000]
+#%%
+# new 3 variables
 # List of time points
-time_points = ['_H' + str(i) for i in range(0, 13)]  # Adjust the range if necessary
+time_points = ['_H' + str(i) for i in range(0, 13)]
 
 # Iterate over each time point and create the TOTAL_amount_balance variable
 for time_point in time_points:
@@ -90,41 +92,12 @@ for time_point in time_points:
     df[total_col] = df[inc_col] - df[out_col]
 
 
-# df = df.iloc[:100]
-
-#%%
-# change into linear model for trend
-
-time_attention_variables = {'Current_amount_balance',
- 'DPD_credit_card',
- 'DPD_mortgage',
- 'DPD_term_loan',
- 'Default_flag',
- 'Income',
- 'Os_credit_card',
- 'Os_mortgage',
- 'Os_term_loan',
- 'Overdue_credit_card',
- 'Overdue_mortgage',
- 'Overdue_term_loan',
- 'Payments_credit_card',
- 'Payments_mortgage',
- 'Payments_term_loan',
- 'Savings_amount_balance',
- 'inc_transactions',
- 'inc_transactions_amt',
- 'limit_in_revolving_loans',
- 'out_transactions',
- 'out_transactions_amt',
- 'utilized_limit_in_revolving_loans'
-}
-
 time_linear_variables = {
  'TOTAL_amount_balance',
  'Income',
  'Diff_transactions',
 }
-
+#%%
 from sklearn.linear_model import LinearRegression
 
 def slope_to_angle(slope):
@@ -164,13 +137,6 @@ def calculate_trend_and_variance(df, variable_names):
 variable_names = time_linear_variables
 results_df = calculate_trend_and_variance(df, variable_names)
 
-print(results_df)
-
-#%%
-#results_df.to_csv(r'C:\Users\jmask\Desktop\ING\train_added.csv', index=False)
-
-#%%
-# remove all H.. name columns
 import re
 
 columns_to_keep = [col for col in df.columns if not re.search(r'H\d+', col)]
@@ -194,137 +160,7 @@ df_filtered[columns_to_replace] = df_filtered[columns_to_replace].replace(-9999,
 df_filtered = df_filtered.drop(columns=['Ref_month', 'Birth_date', 'Contract_origination_date', 'Contract_end_date', 'Oldest_account_date', 'Customer_id'])
 
 
-
 #%%
-X = df_filtered.drop('Target', axis=1)
-y = df_filtered['Target']
-X, y
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1)
-X_train_tuning, X_val, y_train_tuning, y_val = train_test_split(X_train, y_train, test_size=0.25, random_state=1)
-
-from itertools import combinations
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
-from sklearn.preprocessing import StandardScaler
-
-# Initialize a dictionary to hold the best AUC score for each column
-best_auc_scores = {}
-
-# Loop over each column in X_train_tuning
-for column in X_train_tuning.columns:
-    best_auc = -np.inf
-    best_transformation = ''
-
-    # Define transformations
-    transformations = {
-    'original': X_train_tuning[column],
-    'log': np.log(X_train_tuning[column] + np.abs(X_train_tuning[column].min()) + 1),
-    'poly': X_train_tuning[column] + np.power(X_train_tuning[column], 2),
-    'inverse': 1 / (X_train_tuning[column] + np.abs(X_train_tuning[column].min()) + 1),
-    'sqrt': np.sqrt(X_train_tuning[column] + np.abs(X_train_tuning[column].min())),
-    # 'exp': np.exp(X_train_tuning[column] - np.abs(X_train_tuning[column].min())),
-    # 'cubic': np.power(X_train_tuning[column], 3),
-    # 'reciprocal_sqrt': 1 / np.sqrt(X_train_tuning[column] + np.abs(X_train_tuning[column].min())),
-    'sine': np.sin(X_train_tuning[column]),
-    'cosine': np.cos(X_train_tuning[column])
-}
-
-    for trans_name, trans_data in transformations.items():
-        # Standardize the transformed data
-        scaler = StandardScaler()
-        X_train_trans = scaler.fit_transform(trans_data.values.reshape(-1, 1))
-        X_val_trans = scaler.transform(X_val[column].values.reshape(-1, 1))
-
-        # Fit logistic regression model
-        model = LogisticRegression(random_state=1)
-        model.fit(X_train_trans, y_train_tuning)
-
-        # Predict on validation set and calculate AUC
-        y_pred_prob = model.predict_proba(X_val_trans)[:, 1]
-        auc_score = roc_auc_score(y_val, y_pred_prob)
-
-        # Check if this is the best AUC for the column
-        if auc_score > best_auc:
-            best_auc = auc_score
-            best_transformation = trans_name
-
-    # Save the best AUC score and transformation for the column
-    best_auc_scores[column] = (best_transformation, best_auc)
-
-# Print the best transformation and AUC score for each column
-for column, (transformation, auc) in best_auc_scores.items():
-    print(f"Column: {column}, Best Transformation: {transformation}, AUC: {auc}")
-
-# Initialize a list to hold the results
-results = []
-
-# Loop over each pair of columns in X_train_tuning
-for col1, col2 in combinations(X_train_tuning.columns, 2):
-    # Create a new feature by dividing col1 by col2, adding a small constant to avoid division by zero
-    X_train_ratio = X_train_tuning[col1] / (X_train_tuning[col2] + 1e-8)
-    X_val_ratio = X_val[col1] / (X_val[col2] + 1e-8)
-
-    # Standardize the new feature
-    scaler = StandardScaler()
-    X_train_ratio_scaled = scaler.fit_transform(X_train_ratio.values.reshape(-1, 1))
-    X_val_ratio_scaled = scaler.transform(X_val_ratio.values.reshape(-1, 1))
-
-    # Fit logistic regression model
-    model = LogisticRegression(random_state=1)
-    model.fit(X_train_ratio_scaled, y_train_tuning)
-
-    # Predict on validation set and calculate AUC
-    y_pred_prob = model.predict_proba(X_val_ratio_scaled)[:, 1]
-    auc_score = roc_auc_score(y_val, y_pred_prob)
-
-    # Save the results
-    results.append(((col1, col2), auc_score))
-
-# Sort the results by AUC score in descending order
-results_sorted = sorted(results, key=lambda x: x[1], reverse=True)
-
-# Print the sorted results
-for (col1, col2), auc in results_sorted:
-    print(f"Column Pair: {col1} / {col2}, AUC: {auc}")
-
-# Initialize a list to hold the results
-results = []
-
-# Loop over each pair of columns in X_train_tuning
-for col1, col2 in combinations(X_train_tuning.columns, 2):
-    # Create a new feature by dividing col1 by col2, adding a small constant to avoid division by zero
-    X_train_ratio = X_train_tuning[col1] * (X_train_tuning[col2])
-    X_val_ratio = X_val[col1] * (X_val[col2])
-
-    # Standardize the new feature
-    scaler = StandardScaler()
-    X_train_ratio_scaled = scaler.fit_transform(X_train_ratio.values.reshape(-1, 1))
-    X_val_ratio_scaled = scaler.transform(X_val_ratio.values.reshape(-1, 1))
-
-    # Fit logistic regression model
-    model = LogisticRegression(random_state=1)
-    model.fit(X_train_ratio_scaled, y_train_tuning)
-
-    # Predict on validation set and calculate AUC
-    y_pred_prob = model.predict_proba(X_val_ratio_scaled)[:, 1]
-    auc_score = roc_auc_score(y_val, y_pred_prob)
-
-    # Save the results
-    results.append(((col1, col2), auc_score))
-
-# Sort the results by AUC score in descending order
-results_sorted = sorted(results, key=lambda x: x[1], reverse=True)
-
-# Print the sorted results
-for (col1, col2), auc in results_sorted:
-    print(f"Column Pair: {col1} * {col2}, AUC: {auc}")
-
-#%%
-error
 def plot_roc_curve(fpr, tpr, title='ROC Curve'):
     roc_auc = auc(fpr, tpr)
     plt.figure()
@@ -357,9 +193,20 @@ def evaluate_predictions(y_true, y_pred):
     # Display Classification Report
     print("\nClassification Report:")
     print(classification_report(y_true, y_pred))
+
+
+#%%
+# data split
+X = df_filtered.drop('Target', axis=1)
+y = df_filtered['Target']
+X, y
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1)
+X_train_tuning, X_val, y_train_tuning, y_val = train_test_split(X_train, y_train, test_size=0.25, random_state=1)
+
+
 #%%
 # XGBoost model
-
 # XGB - same dataset as before
 X_train_XGB = X_train_tuning
 X_val_XGB = X_val
@@ -373,7 +220,6 @@ smote = SMOTE(random_state=1234)
 X_train_XGB_resampled, y_train_XGB_resampled = smote.fit_resample(X_train_tuning, y_train_tuning)
 
 #%%
-
 def objective(trial):
     param = {
         'objective': 'binary:logistic',
@@ -560,3 +406,94 @@ y_test_pred_prob_calibrated = calibrated_model.predict_proba(X_test)[:, 1]
 fpr_test_calibrated, tpr_test_calibrated, _ = roc_curve(y_test.astype(int).values, y_test_pred_prob_calibrated)
 # Use your existing plot_roc_curve function to plot the ROC curve for the calibrated model
 plot_roc_curve(fpr_test_calibrated, tpr_test_calibrated, 'Test Set ROC Curve XGB (Calibrated)')
+
+#%%
+# 4 variables related to trends
+df_filtered['Diff_transactions_variance_pct'] = np.sqrt(df_filtered['Diff_transactions_variance_pct'])
+df_filtered['TOTAL_amount_balance_variance_pct'] = np.sqrt(df_filtered['TOTAL_amount_balance_variance_pct'])
+df_filtered['TOTAL_amount_balance_trend_angle'] = np.log(df_filtered['TOTAL_amount_balance_trend_angle'] + 1)
+
+# Assuming Active_loans column exists in your dataset for the next operation
+df_filtered['Active_loans_Current_installment'] = df_filtered['Active_loans'] * df_filtered['Current_installment']
+df_filtered['Ratio'] = df_filtered['Current_installment'] / df_filtered['Last_Income']
+
+DF_FINAL = df_filtered[['Diff_transactions_variance_pct', 'TOTAL_amount_balance_variance_pct', 'TOTAL_amount_balance_trend_angle', 'Active_loans_Current_installment',
+                        'Num_borrowers', 'Ratio']]
+
+# add XGBoost results
+
+#%%
+
+# cards model
+columns_financial_liabilities = ["Credit_cards",
+"Active_credit_card_lines",
+"Debit_cards",
+"Active_loans",
+"Active_mortgages",
+"Active_accounts"]
+
+# FL - financial liabilities
+X_train_FL = X_train_tuning
+X_val_FL = X_val
+X_test_FL = X_test
+y_train_FL = y_train_tuning
+y_val_FL = y_val
+y_test_FL = y_test
+
+#%%
+import statsmodels.api as sm
+
+
+
+#%%
+
+X_train_ATT = X_train_tuning
+X_val_ATT = X_val
+X_test_ATT = X_test
+y_train_ATT = y_train_tuning
+y_val_ATT = y_val
+y_test_ATT = y_test
+
+df = data[columns_financial_liabilities + ['Target']].replace(-9999, 0)  #we replaced -9999 with zero
+
+X = df.iloc[:, :-1]  # Assuming the last column is the target
+y = df.iloc[:, -1]
+
+# Add a constant to the features (important for statsmodels)
+X = sm.add_constant(X)
+
+# Fit the logistic regression model
+model = sm.Logit(y, X).fit()
+
+# Print the summary of the logistic regression model
+print(model.summary())
+
+# Apply the coefficients as weights to sum all columns in each row
+# Note: We skip the first coefficient as it's the intercept
+coefficients = model.params[1:]  # Exclude intercept
+
+
+coefficients
+
+
+weighted_sum = (X.iloc[:, 1:] * coefficients.values).sum(axis=1)
+
+
+#%%
+X
+#%%
+X.iloc[:, 1:] * coefficients.values
+#%%
+df = pd.read_csv('financial_data.csv')
+
+#%%
+# ATTENTION TREE MODEL
+
+
+#%%
+# final input
+# 1 XGBoost model
+# 2, 3, 4, 5 'Diff_transactions_variance_pct', 'TOTAL_amount_balance_variance_pct', 'TOTAL_amount_balance_trend_angle', 'Active_loans_Current_installment'
+# 6 - active cards ets
+# 7 attention model
+
