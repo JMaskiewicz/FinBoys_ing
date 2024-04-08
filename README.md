@@ -1,10 +1,14 @@
 # FinBoys_ing
 
-### time managment
+This repository is crafted for the ING Hackathon for team FinBoys.
+
+
+
+### time managment plan (8h)
 0.5 - task reading 
 2.5h – data preparation
 1h – modeling 
-2h – opis 
+2h – description
 1h – reserve time 
 
 
